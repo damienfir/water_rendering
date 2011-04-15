@@ -23,7 +23,7 @@ class Viewer:
 		glActiveTexture(GL_TEXTURE0)
 		glBindTexture(GL_TEXTURE_2D, self.textures[0].name)
 		glUniform1i(self.shader.uniforms['textures'][0], 1)
-	
+			
 		glActiveTexture(GL_TEXTURE1)
 		glBindTexture(GL_TEXTURE_2D, self.textures[1].name)
 		glUniform1i(self.shader.uniforms['textures'][1], 1)
@@ -34,9 +34,7 @@ class Viewer:
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.object.elements)
 		glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_SHORT, None)
 		
-		glDisableVertexAttribPointer(self.shader.uniforms['position'])
-		
-		glSwapBuffers()
+		glutSwapBuffers()
 	
 	def idle(self):
 		pass
@@ -50,6 +48,7 @@ class Viewer:
 		], [0, 1, 2, 3])
 		self.textures = [Texture('tex1.jpg'), Texture('tex2.jpg')]
 		self.shader = Shader('hello.vs', 'hello.fs')
+		pass
 	
 	
 	def callbacks(self):
@@ -91,11 +90,12 @@ class Texture:
 	def __init__(self, filename):
 		self.filename = filename
 		self.im = self.read()
-		self.width, self.height = self.im.size
 		self.name = self.generate()
 	
 	def read(self):
-		return Image.open(self.filename)
+		im = Image.open(self.filename)
+		self.width, self.height = im.size
+		return np.asarray(im)
 	
 	def generate(self):
 		tex = glGenTextures(1)
@@ -120,17 +120,17 @@ class Shader:
 	
 	def compile(self, type, fname):
 		source = open(fname, 'r').read()
-		shader = glCreateShader(type, )
-		glShaderSource(shader, 1, source, len(source))
+		shader = glCreateShader(type)
+		glShaderSource(shader, source)
 		glCompileShader(shader)
 		
 		# check if compilation was ok
 		status = 0
-		glGetShaderiv(shader, GL_COMPILE_STATUS, status)
-		if not status:
-			print "Failed to compile shader: %s" % fname
-			glDeleteShader(shader)
-			return 0
+		# glGetShaderiv(shader, GL_COMPILE_STATUS, status)
+		# if not status:
+		# 	print "Failed to compile shader: %s" % fname
+		# 	glDeleteShader(shader)
+		# 	return 0
 		return shader
 	
 	def make_program(self):
@@ -140,11 +140,11 @@ class Shader:
 		glLinkProgram(p)
 		
 		# check if link was ok
-		status = 0
-		glGetProgramiv(p, GL_LINK_STATUS, status)
-		if not status:
-			print "Failed to link shader program"
-		
+		# status = 0
+		# glGetProgramiv(p, GL_LINK_STATUS, status)
+		# if not status:
+		# 	print "Failed to link shader program"
+		# 
 		return p
 	
 	def location(self):
@@ -154,5 +154,5 @@ class Shader:
 				glGetUniformLocation(self.program, 'texture[0]'),
 				glGetUniformLocation(self.program, 'texture[1]')
 			],
-			'position': glGetAttributeLocation(self.program, 'position')
+			'position': glGetAttribLocation(self.program, 'position')
 		}
