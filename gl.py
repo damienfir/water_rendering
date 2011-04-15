@@ -10,26 +10,26 @@ import numpy as np
 
 class Viewer:
 	def __init__(self):
-		pass
-		
+		self.fade_factor = 0.0
+	
 	def init(self):
-		glClearColor(1,1,1,1)
+		glClearColor(0,0,0,1)
 		glEnable(GL_DEPTH_TEST)
 	
 	def display(self):
-		glUseProgram(self.shader.program)
-		glUniform1f(self.shader.uniforms['fade_factor'], self.shader.fade_factor)
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 		
-		glActiveTexture(GL_TEXTURE0)
-		glBindTexture(GL_TEXTURE_2D, self.textures[0].name)
-		glUniform1i(self.shader.uniforms['textures'][0], 1)
-			
-		glActiveTexture(GL_TEXTURE1)
-		glBindTexture(GL_TEXTURE_2D, self.textures[1].name)
-		glUniform1i(self.shader.uniforms['textures'][1], 1)
+		glUseProgram(self.shader.program)
+		self.shader.set_uniform('fade_factor', self.fade_factor)
+		
+		self.textures[0].bind(0)
+		self.shader.set_uniform('texture[0]', 1, 'i')
+		
+		self.textures[1].bind(1)
+		self.shader.set_uniform('texture[1]', 1, 'i')
 		
 		glBindBuffer(GL_ARRAY_BUFFER, self.object.vertices)
-		glVertexAttribPointer(self.shader.uniforms['position'], 2, GL_FLOAT, GL_FALSE, sys.getsizeof(GLfloat)*2, None)
+		glVertexAttribPointer(self.shader.attributes['position'], 2, GL_FLOAT, GL_FALSE, sys.getsizeof(GLfloat)*2, None)
 		
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.object.elements)
 		glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_SHORT, None)
@@ -37,7 +37,9 @@ class Viewer:
 		glutSwapBuffers()
 	
 	def idle(self):
-		pass
+		ms = glutGet(GLUT_ELAPSED_TIME)
+		self.shader.fade_factor = np.sin(ms * 0.001) * 0.5 + 0.5
+		glutPostRedisplay()
 	
 	def resources(self):
 		self.object = Object([
@@ -48,8 +50,6 @@ class Viewer:
 		], [0, 1, 2, 3])
 		self.textures = [Texture('tex1.jpg'), Texture('tex2.jpg')]
 		self.shader = Shader('hello.vs', 'hello.fs')
-		pass
-	
 	
 	def callbacks(self):
 		glutDisplayFunc(self.display)
@@ -84,6 +84,7 @@ class Object:
 		return buf
 
 
+tex = [GL_TEXTURE0, GL_TEXTURE1]
 
 # Textures
 class Texture:
@@ -106,7 +107,10 @@ class Texture:
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, self.width, self.height, 0, GL_BGR, GL_UNSIGNED_BYTE, self.im)
 		return tex
-
+	
+	def bind(self, n):
+		glActiveTexture(tex[n])
+		glBindTexture(GL_TEXTURE_2D, self.name)
 
 
 # Shaders
@@ -115,8 +119,7 @@ class Shader:
 		self.vs = self.compile(GL_VERTEX_SHADER, vs_fname)
 		self.fs = self.compile(GL_FRAGMENT_SHADER, fs_fname)
 		self.program = self.make_program()
-		self.uniforms = self.location()
-		self.fade_factor = 0.0
+		self.save_locations()
 	
 	def compile(self, type, fname):
 		source = open(fname, 'r').read()
@@ -125,7 +128,7 @@ class Shader:
 		glCompileShader(shader)
 		
 		# check if compilation was ok
-		status = 0
+		# status = 0
 		# glGetShaderiv(shader, GL_COMPILE_STATUS, status)
 		# if not status:
 		# 	print "Failed to compile shader: %s" % fname
@@ -147,12 +150,18 @@ class Shader:
 		# 
 		return p
 	
-	def location(self):
-		return {
+	def save_locations(self):
+		self.uniforms = {
 			'fade_factor': glGetUniformLocation(self.program, 'fade_factor'),
-			'textures': [
-				glGetUniformLocation(self.program, 'texture[0]'),
-				glGetUniformLocation(self.program, 'texture[1]')
-			],
+			'texture[0]': glGetUniformLocation(self.program, 'texture[0]'),
+			'texture[1]': glGetUniformLocation(self.program, 'texture[1]')
+		}
+		self.attributes = {
 			'position': glGetAttribLocation(self.program, 'position')
 		}
+	
+	def set_uniform(self, name, value, type='f'):
+		if type == 'f':
+			glUniform1f(self.uniforms[name], value)
+		elif type == 'i':
+			glUniform1i(self.uniforms[name], value)
