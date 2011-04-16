@@ -1,8 +1,11 @@
 import sys
 
+import OpenGL
+OpenGL.ERROR_ON_COPY = True
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
+from OpenGL.arrays import vbo
 
 import Image
 import numpy as np
@@ -10,84 +13,107 @@ import numpy as np
 
 class Viewer:
 	def __init__(self):
-		self.fade_factor = 0.0
+		pass
 	
-	def init(self):
-		glClearColor(0,0,0,1)
+	def init(self, w, h):
+		glClearColor(0,0,0,0)
+		glClearDepth(1.0)
+		glDepthFunc(GL_LESS)
 		glEnable(GL_DEPTH_TEST)
+		glShadeModel(GL_SMOOTH)
+		
+		glMatrixMode(GL_PROJECTION)
+		glLoadIdentity()
+		gluPerspective(45.0, float(w)/float(h), 0.1, 100.0)
+		glMatrixMode(GL_MODELVIEW)
+	
+	def reshape(self, w, h):
+		glViewport(0,0,w,h)
+		glMatrixMode(GL_PROJECTION)
+		glLoadIdentity()
+		gluPerspective(45.0, float(w)/float(h), 0.1, 100.0)
+		glMatrixMode(GL_MODELVIEW)
+		
 	
 	def display(self):
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 		
 		glUseProgram(self.shader.program)
-		self.shader.set_uniform('fade_factor', self.fade_factor)
 		
-		self.textures[0].bind(0)
-		self.shader.set_uniform('texture[0]', 1, 'i')
-		
-		self.textures[1].bind(1)
-		self.shader.set_uniform('texture[1]', 1, 'i')
-		
-		glBindBuffer(GL_ARRAY_BUFFER, self.object.vertices)
-		glVertexAttribPointer(self.shader.attributes['position'], 2, GL_FLOAT, GL_FALSE, sys.getsizeof(GLfloat)*2, None)
-		
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.object.elements)
-		glDrawElements(GL_TRIANGLE_STRIP, 4, GL_UNSIGNED_SHORT, None)
+		self.vbo.bind()
+		glEnableClientState(GL_VERTEX_ARRAY)
+		glVertexPointerf(self.vbo)
+		glDrawArrays(GL_TRIANGLES, 0, 3)
 		
 		glutSwapBuffers()
 	
 	def idle(self):
-		ms = glutGet(GLUT_ELAPSED_TIME)
-		self.shader.fade_factor = np.sin(ms * 0.001) * 0.5 + 0.5
-		glutPostRedisplay()
+		pass
 	
 	def resources(self):
-		self.object = Object([
-			-1.0, -1.0,
-			1.0, 1.0,
-			-1.0, 1.0,
-			1.0, 1.0
-		], [0, 1, 2, 3])
-		self.textures = [Texture('tex1.jpg'), Texture('tex2.jpg')]
+		self.object = Object(
+			vertices=[-1.0, -1.0,  1.0, -1.0,  -1.0, 1.0,  1.0, 1.0],
+			# colors=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
+		)
+		# # self.textures = [Texture('tex1.jpg'), Texture('tex2.jpg')]
 		self.shader = Shader('hello.vs', 'hello.fs')
-	
-	def callbacks(self):
-		glutDisplayFunc(self.display)
-		glutIdleFunc(self.idle)
-	
+		print 'resources'
+		# self.vs = compileShader(open('hello.vs').read(), GL_VERTEX_SHADER)
+		# self.fs = compileShader(open('hello.fs').read(), GL_FRAGMENT_SHADER)
+		# self.shader = compileProgram(self.vs, self.fs)
+		self.vbo = vbo.VBO(np.array([
+			[0.0, 1.0, 0.0],
+			[-1.0,-1.0, 0.0],
+			[1.0,-1.0, 0.0]
+		], 'f'))
 	
 	def run(self):
-		glutInit(len(sys.argv), sys.argv)
-		glutInitWindowSize(400, 300)
-		glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH)
-		glutCreateWindow('Hello')
+		glutInit(sys.argv)
+		glutInitWindowSize(640, 480)
+		glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH)
+		window = glutCreateWindow('Hello')
 
-		self.init()
-		self.callbacks()
+		glutDisplayFunc(self.display)
+		glutIdleFunc(self.display)
+		glutReshapeFunc(self.reshape)
 		
+		self.init(640, 480)
 		self.resources()
-
+		
 		glutMainLoop()
-
-
+	
 
 # Objects
 class Object:
-	def __init__(self, vertices, elements):
-		self.vertices = self.buffer(GL_ARRAY_BUFFER, np.asarray(vertices), sys.getsizeof(vertices[0]))
-		self.elements = self.buffer(GL_ELEMENT_ARRAY_BUFFER, np.asarray(elements), sys.getsizeof(elements[0]))
+	def __init__(self, vertices, elements=None, colors=None, normals=None):
+		self.vertices_index = self.buffer(GL_ARRAY_BUFFER, np.asarray(vertices))
+		# self.vertices_index = self.gen_vertices(np.asarray(vertices))
+		# self.elements_index = self.buffer(GL_ELEMENT_ARRAY_BUFFER, np.asarray(elements))
+		# self.colors_index = self.buffer(GL_ARRAY_BUFFER, np.asarray(colors))
+		# self.normals_index = self.buffer(GL_ARRAY_BUFFER, np.asarray(normals))
 	
-	def buffer(self, target, data, size):
+	def buffer(self, target, data):
+		if not data.size: return None
 		buf = glGenBuffers(1)
 		glBindBuffer(target, buf)
-		glBufferData(target, size, data, GL_STATIC_DRAW)
+		glBufferData(target, ADT.arrayByteCount(data), ADT.voidDataPointer(data), GL_STATIC_DRAW)
+		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, None)
+		glEnableVertexAttribArray(0)
 		return buf
+	
+	def gen_vertices(self, data):
+		a = glGenBuffers(1)
+		glBindBuffer(GL_ARRAY_BUFFER, a)
+		glBufferData(GL_ARRAY_BUFFER, data, GL_STATIC_DRAW)
+		glVertexPointer(4, GL_FLOAT, 0, None)
+		glBindBuffer(GL_ARRAY_BUFFER, a)
+		glEnableClientState(GL_VERTEX_ARRAY)
 
-
-tex = [GL_TEXTURE0, GL_TEXTURE1]
 
 # Textures
 class Texture:
+	tex = [GL_TEXTURE0, GL_TEXTURE1]
+	
 	def __init__(self, filename):
 		self.filename = filename
 		self.im = self.read()
@@ -109,7 +135,7 @@ class Texture:
 		return tex
 	
 	def bind(self, n):
-		glActiveTexture(tex[n])
+		glActiveTexture(self.tex[n])
 		glBindTexture(GL_TEXTURE_2D, self.name)
 
 
@@ -119,38 +145,39 @@ class Shader:
 		self.vs = self.compile(GL_VERTEX_SHADER, vs_fname)
 		self.fs = self.compile(GL_FRAGMENT_SHADER, fs_fname)
 		self.program = self.make_program()
-		self.save_locations()
 	
-	def compile(self, type, fname):
-		source = open(fname, 'r').read()
-		shader = glCreateShader(type)
+	def compile(self, target, fname):
+		source = open(fname).read()
+		shader = glCreateShader(target)
 		glShaderSource(shader, source)
 		glCompileShader(shader)
-		
-		# check if compilation was ok
-		# status = 0
-		# glGetShaderiv(shader, GL_COMPILE_STATUS, status)
-		# if not status:
-		# 	print "Failed to compile shader: %s" % fname
-		# 	glDeleteShader(shader)
-		# 	return 0
+		if not self.check_compile(shader): return 0
 		return shader
-	
+		
 	def make_program(self):
 		p = glCreateProgram()
 		glAttachShader(p, self.vs)
 		glAttachShader(p, self.fs)
+		glBindAttribLocation(p, 0, "position")
 		glLinkProgram(p)
-		
-		# check if link was ok
-		# status = 0
-		# glGetProgramiv(p, GL_LINK_STATUS, status)
-		# if not status:
-		# 	print "Failed to link shader program"
-		# 
+		if not self.check_link(p): return 0
 		return p
 	
+	def check_compile(self, shader):
+		status = glGetShaderiv(shader, GL_COMPILE_STATUS, None)
+		if not status:
+			print "Failed to compile shader: %s" % fname
+			glDeleteShader(shader)
+		return status
+	
+	def check_link(self, program):
+		status = glGetProgramiv(program, GL_LINK_STATUS, None)
+		if not status:
+			print "Failed to link shader program"
+		return status
+	
 	def save_locations(self):
+		return
 		self.uniforms = {
 			'fade_factor': glGetUniformLocation(self.program, 'fade_factor'),
 			'texture[0]': glGetUniformLocation(self.program, 'texture[0]'),
@@ -165,3 +192,4 @@ class Shader:
 			glUniform1f(self.uniforms[name], value)
 		elif type == 'i':
 			glUniform1i(self.uniforms[name], value)
+	
