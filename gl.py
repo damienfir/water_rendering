@@ -9,10 +9,10 @@ from OpenGL.arrays import vbo
 import Image
 import numpy as np
 
-import matrix
-
 
 class Viewer:
+	refresh = 40
+	
 	def __init__(self, name, width, height):
 		self.width = width
 		self.height = height
@@ -21,21 +21,28 @@ class Viewer:
 	def init(self):
 		glClearColor(0,0,0,0)
 		glEnable(GL_DEPTH_TEST)
+		self.last = glutGet(GLUT_ELAPSED_TIME)
+	
+	def can_refresh(self):
+	 	delta = glutGet(GLUT_ELAPSED_TIME) - self.last
+		ok = delta >= self.refresh
+		if ok: self.last += delta
+		return ok
 	
 	def reshape(self, w, h):
 		glViewport(0,0,w,h)
 	
 	def display(self):
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-		glUseProgram(self.shader.program)
 		
+		self.shader.use()
 		self.shader.set_matrices(self.model, self.camera)
+		
 		self.model.draw()
 		
 		glutSwapBuffers()
 	
 	def idle(self):
-		# glutPostRedisplay()
 		pass
 	
 	def resources(self):
@@ -269,3 +276,9 @@ class Shader:
 	
 	def set_matrix(self, name, mat):
 		glUniformMatrix4fv(self.uniforms[name], 1, GL_TRUE, mat)
+	
+	def use(self):
+		glUseProgram(self.program)
+	
+	def unuse(self):
+		glUseProgram(0)
