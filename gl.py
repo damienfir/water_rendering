@@ -1,7 +1,6 @@
 import sys
+import math
 
-import OpenGL
-OpenGL.ERROR_ON_COPY = True
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
@@ -10,105 +9,180 @@ from OpenGL.arrays import vbo
 import Image
 import numpy as np
 
+import matrix
+
 
 class Viewer:
-	def __init__(self):
-		pass
+	def __init__(self, name, width, height):
+		self.width = width
+		self.height = height
+		self.name = name
 	
-	def init(self, w, h):
+	def init(self):
 		glClearColor(0,0,0,0)
-		glClearDepth(1.0)
-		glDepthFunc(GL_LESS)
 		glEnable(GL_DEPTH_TEST)
-		glShadeModel(GL_SMOOTH)
-		
-		glMatrixMode(GL_PROJECTION)
-		glLoadIdentity()
-		gluPerspective(45.0, float(w)/float(h), 0.1, 100.0)
-		glMatrixMode(GL_MODELVIEW)
 	
 	def reshape(self, w, h):
 		glViewport(0,0,w,h)
-		glMatrixMode(GL_PROJECTION)
-		glLoadIdentity()
-		gluPerspective(45.0, float(w)/float(h), 0.1, 100.0)
-		glMatrixMode(GL_MODELVIEW)
-		
 	
 	def display(self):
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-		
 		glUseProgram(self.shader.program)
 		
-		self.vbo.bind()
-		glEnableClientState(GL_VERTEX_ARRAY)
-		glVertexPointerf(self.vbo)
-		glDrawArrays(GL_TRIANGLES, 0, 3)
+		self.shader.set_matrices(self.model, self.camera)
+		self.model.draw()
 		
 		glutSwapBuffers()
 	
 	def idle(self):
+		# glutPostRedisplay()
 		pass
 	
 	def resources(self):
-		self.object = Object(
-			vertices=[-1.0, -1.0,  1.0, -1.0,  -1.0, 1.0,  1.0, 1.0],
-			# colors=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
-		)
-		# # self.textures = [Texture('tex1.jpg'), Texture('tex2.jpg')]
+		self.camera = Camera(60, 3./4., 0.1, 100.0)
+		self.model = Model(
+			vertices=[
+				[0.0, 1.0, 0.0],
+				[-1.0,-1.0, 0.0],
+				[1.0,-1.0, 0.0]
+			]
+		).translate_world([0,0,-1])
 		self.shader = Shader('hello.vs', 'hello.fs')
-		print 'resources'
-		# self.vs = compileShader(open('hello.vs').read(), GL_VERTEX_SHADER)
-		# self.fs = compileShader(open('hello.fs').read(), GL_FRAGMENT_SHADER)
-		# self.shader = compileProgram(self.vs, self.fs)
-		self.vbo = vbo.VBO(np.array([
-			[0.0, 1.0, 0.0],
-			[-1.0,-1.0, 0.0],
-			[1.0,-1.0, 0.0]
-		], 'f'))
 	
 	def run(self):
 		glutInit(sys.argv)
-		glutInitWindowSize(640, 480)
+		glutInitWindowSize(self.width, self.height)
 		glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH)
-		window = glutCreateWindow('Hello')
-
+		window = glutCreateWindow(self.name)
+		
 		glutDisplayFunc(self.display)
-		glutIdleFunc(self.display)
+		glutIdleFunc(self.idle)
 		glutReshapeFunc(self.reshape)
 		
-		self.init(640, 480)
+		self.init()
 		self.resources()
 		
 		glutMainLoop()
+
+
+class Object:
+	def __init__(self):
+		self.m = self.identity()
 	
+	def modelworld(self):
+		return self.m
+	
+	def identity(self):
+		return np.matrix(np.identity(4, 'f'))
+		
+	def scale_world(self, s):
+		self.m = self.scale_matrix(s) * self.m
+		return self
+	
+	def scale_object(self, s):
+		self.m = self.m * self.scale_matrix(s)
+		return self
+	
+	def translate_world(self, t):
+		self.m = self.translation_matrix(t) * self.m
+		return self
+	
+	def translate_object(self, t):
+		self.m = self.m * self.translation_matrix(t)
+		return self
+
+	def rotate_world(self, axis, angle):
+		self.m = self.rotation_matrix(axis, angle) * self.m
+		return self
+	
+	def rotate_object(self, axis, angle):
+		r = self.rotation_matrix(axis, angle)
+		self.m = self.m * r
+		return self
+	
+	def translation_matrix(self, t):
+		a = self.identity()
+		a[0, 3] = t[0]
+		a[1, 3] = t[1]
+		a[2, 3] = t[2]
+		return a
+	
+	def scale_matrix(self, s):
+		if isinstance(s, (int, float)):
+			s = [s]*3
+		a = self.identity()
+		a[0, 0] = s[0]
+		a[1, 1] = s[1]
+		a[2, 2] = s[2]
+		return a
+	
+	def rotation_matrix(self, axis, a):
+		a = math.radians(a)
+		cosa, sina = math.cos(a), math.sin(a)
+		x,y,z = axis
+		axis = np.concatenate((np.asarray(axis, 'f'), [0]))
+		rot = (cosa * np.identity(4))
+		rot += (1-cosa) * np.array([x*axis, y*axis, z*axis, [0,0,0,1]])
+		rot += sina * np.array([
+			[0, z, -x, 0],
+			[-z, 0, x, 0],
+			[y, -x, 0, 0],
+			[0,0,0,0]
+		])
+		return np.matrix(rot, 'f')
+
 
 # Objects
-class Object:
+class Model(Object):
 	def __init__(self, vertices, elements=None, colors=None, normals=None):
-		self.vertices_index = self.buffer(GL_ARRAY_BUFFER, np.asarray(vertices))
-		# self.vertices_index = self.gen_vertices(np.asarray(vertices))
+		self.vertices_index = vbo.VBO(np.asarray(vertices, 'f'))
 		# self.elements_index = self.buffer(GL_ELEMENT_ARRAY_BUFFER, np.asarray(elements))
 		# self.colors_index = self.buffer(GL_ARRAY_BUFFER, np.asarray(colors))
 		# self.normals_index = self.buffer(GL_ARRAY_BUFFER, np.asarray(normals))
+		self.m = self.identity()
 	
-	def buffer(self, target, data):
-		if not data.size: return None
-		buf = glGenBuffers(1)
-		glBindBuffer(target, buf)
-		glBufferData(target, ADT.arrayByteCount(data), ADT.voidDataPointer(data), GL_STATIC_DRAW)
-		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, None)
-		glEnableVertexAttribArray(0)
-		return buf
-	
-	def gen_vertices(self, data):
-		a = glGenBuffers(1)
-		glBindBuffer(GL_ARRAY_BUFFER, a)
-		glBufferData(GL_ARRAY_BUFFER, data, GL_STATIC_DRAW)
-		glVertexPointer(4, GL_FLOAT, 0, None)
-		glBindBuffer(GL_ARRAY_BUFFER, a)
+	def draw(self):
 		glEnableClientState(GL_VERTEX_ARRAY)
+		self.vertices_index.bind()
+		glVertexPointerf(self.vertices_index)
+		
+		glDrawArrays(GL_TRIANGLES, 0, 3)
+		
+		self.vertices_index.unbind()
+		glDisableClientState(GL_VERTEX_ARRAY);
+		
 
+
+class Camera(Object):
+	def __init__(self, angle, aspect, near, far):
+		self.angle = math.radians(angle)
+		self.aspect = aspect
+		self.near = near
+		self.far = far
+		self.m = self.identity()
+		self.proj = self.projection()
+	
+	def worldcamera(self):
+		return np.linalg.inv(self.m)
+	
+	def projection(self):
+		n = self.near
+		f = self.far
+		t = n * math.tan(self.angle)
+		b = -t
+		l = b * self.aspect
+		r = t * self.aspect
+		fx = 2.*n/(r-l)
+		fy = 2.*n*(t-b)
+		fz = -(f+n)/(f-n)
+		fw = -2.*f*n/(f-n)
+		return np.matrix([
+			[fx, 0, 0, 0],
+			[0, fy, 0, 0],
+			[0, 0, fz, fw],
+			[0, 0, -1, 0]
+		], 'f')
+	
 
 # Textures
 class Texture:
@@ -145,6 +219,7 @@ class Shader:
 		self.vs = self.compile(GL_VERTEX_SHADER, vs_fname)
 		self.fs = self.compile(GL_FRAGMENT_SHADER, fs_fname)
 		self.program = self.make_program()
+		self.save_locations()
 	
 	def compile(self, target, fname):
 		source = open(fname).read()
@@ -174,22 +249,23 @@ class Shader:
 		status = glGetProgramiv(program, GL_LINK_STATUS, None)
 		if not status:
 			print "Failed to link shader program"
+			glDeleteProgram(program)
 		return status
 	
 	def save_locations(self):
-		return
 		self.uniforms = {
-			'fade_factor': glGetUniformLocation(self.program, 'fade_factor'),
-			'texture[0]': glGetUniformLocation(self.program, 'texture[0]'),
-			'texture[1]': glGetUniformLocation(self.program, 'texture[1]')
-		}
-		self.attributes = {
-			'position': glGetAttribLocation(self.program, 'position')
+			'modelworld': glGetUniformLocation(self.program, 'modelworld'),
+			'worldcamera': glGetUniformLocation(self.program, 'worldcamera'),
+			'projection': glGetUniformLocation(self.program, 'projection')
 		}
 	
-	def set_uniform(self, name, value, type='f'):
-		if type == 'f':
-			glUniform1f(self.uniforms[name], value)
-		elif type == 'i':
-			glUniform1i(self.uniforms[name], value)
+	def set_uniform(self, func, name, value):
+		func(self.uniforms[name], value)
 	
+	def set_matrices(self, model, camera):
+		self.set_matrix('modelworld', model.modelworld())
+		self.set_matrix('worldcamera', camera.worldcamera())
+		self.set_matrix('projection', camera.proj)
+	
+	def set_matrix(self, name, mat):
+		glUniformMatrix4fv(self.uniforms[name], 1, GL_TRUE, mat)
