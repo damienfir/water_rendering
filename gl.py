@@ -167,23 +167,26 @@ class Camera(Object):
 		self.near = near
 		self.far = far
 		self.m = self.identity()
-		self.proj = self.projection()
+		self.update_projection()
 	
 	def worldcamera(self):
 		return np.linalg.inv(self.m)
 	
-	def projection(self):
+	def update_projection(self):
 		n = self.near
 		f = self.far
-		t = n * math.tan(self.angle)
+		
+		t = n * math.tan(self.angle / 2)
 		b = -t
 		l = b * self.aspect
 		r = t * self.aspect
+		
 		fx = 2.*n/(r-l)
 		fy = 2.*n*(t-b)
 		fz = -(f+n)/(f-n)
 		fw = -2.*f*n/(f-n)
-		return np.matrix([
+		
+		self.proj =  np.matrix([
 			[fx, 0, 0, 0],
 			[0, fy, 0, 0],
 			[0, 0, fz, fw],

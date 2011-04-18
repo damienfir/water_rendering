@@ -22,8 +22,8 @@ class WaterViewer(Viewer):
 	
 	def resources(self):
 		self.shader = Shader('water.vs', 'water.fs')
-		self.water = Water(60,40)
-		self.camera = Camera(60.0, 3./4., 0.1, 100.0)
+		self.water = Water(60,40).translate_world([0,0,-10.])
+		self.camera = Camera(45.0, 3./4., 0.1, 100.0)
 
 
 class Water(Object):
@@ -59,9 +59,9 @@ class Water(Object):
 		# h = self.heights.flatten()
 		# self.v[:,1] = h
 		v = [
+			[-1.0, 0.0, 0.0],
 			[0.0, 1.0, 0.0],
-			[-1.0,-1.0, 0.0],
-			[1.0,-1.0, 0.0]
+			[1.0,0.0, 0.0]
 		]
 		self.vertices_index = vbo.VBO(np.array(v, 'f'))
 	
@@ -69,8 +69,8 @@ class Water(Object):
 		glEnableClientState(GL_VERTEX_ARRAY)
 		self.vertices_index.bind()
 		glVertexPointerf(self.vertices_index)
-		
-		glDrawArrays(GL_TRIANGLES, 0, 3)
+		glPointSize(10.0)
+		glDrawArrays(GL_POINTS, 0, 3)
 		
 		self.vertices_index.unbind()
 		glDisableClientState(GL_VERTEX_ARRAY);
