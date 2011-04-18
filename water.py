@@ -3,14 +3,15 @@ import numpy as np
 import scipy as sp
 from scipy import signal
 
+
 class WaterViewer(Viewer):
-	refresh = 40
+	refresh = 10
 	
 	def display(self):
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 		self.shader.use()
 		self.shader.set_matrices(self.water, self.camera)
-		
+		self.water.draw()
 		glutSwapBuffers()
 	
 	def idle(self):
@@ -20,26 +21,27 @@ class WaterViewer(Viewer):
 			glutPostRedisplay()
 	
 	def resources(self):
-		self.water = Water(50,50)
 		self.shader = Shader('water.vs', 'water.fs')
-		self.camera = Camera(60, 3./4., 0.1, 100.0)
+		self.water = Water(60,40)
+		self.camera = Camera(60.0, 3./4., 0.1, 100.0)
 
 
 class Water(Object):
 	def __init__(self, rows, cols):
 		self.m = self.identity()
 		self.rows, self.cols = rows, cols
-		self.heights = np.zeros((rows, cols))
-		self.velocities = np.zeros((rows, cols))
+		self.rc = rows*cols
+		self.heights = np.zeros((rows, cols), 'f')
+		self.velocities = np.zeros((rows, cols), 'f')
 		self.kernel = self.heightmap_kernel()
 		self.init_grid()
+		self.make_vertices()
 	
 	def init_grid(self):
-		self.heights[int(self.rows/2.),int(self.cols/2.)] = 5
-		x = np.ones((self.rows, self.cols))
-		self.x = x * np.arange(self.cols)[:,np.newaxis]
-		y = np.ones((self.rows, self.cols))
-		self.y = y * np.arange(self.rows)[:,np.newaxis]
+		self.heights[int(self.rows/2.),int(self.cols/2.)] = 15
+		z, x = np.array(np.meshgrid(range(self.rows), range(self.cols)), 'f')
+		x, z = x.ravel(), z.ravel()
+		self.v = np.vstack((x, np.zeros_like(x), -z)).T
 	
 	def heightmap_kernel(self):
 		return np.array([
@@ -54,8 +56,14 @@ class Water(Object):
 		self.heights += self.velocities
 	
 	def make_vertices(self):
-		self.vertices = np.dstack((self.x, self.y, self.heights))
-		
+		# h = self.heights.flatten()
+		# self.v[:,1] = h
+		v = [
+			[0.0, 1.0, 0.0],
+			[-1.0,-1.0, 0.0],
+			[1.0,-1.0, 0.0]
+		]
+		self.vertices_index = vbo.VBO(np.array(v, 'f'))
 	
 	def draw(self):
 		glEnableClientState(GL_VERTEX_ARRAY)
