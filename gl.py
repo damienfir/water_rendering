@@ -17,6 +17,7 @@ class Viewer:
 		self.width = width
 		self.height = height
 		self.name = name
+		self.fullscreen = False
 	
 	def init(self):
 		glClearColor(0,0,0,0)
@@ -33,28 +34,29 @@ class Viewer:
 		glViewport(0,0,w,h)
 	
 	def display(self):
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-		
-		self.shader.use()
-		self.shader.set_matrices(self.model, self.camera)
-		
-		self.model.draw()
-		
-		glutSwapBuffers()
+		pass
 	
 	def idle(self):
 		pass
 	
+	def keyboard(self, key, x, y):
+		if key == 'f':
+			if self.fullscreen:
+				glutReshapeWindow(self.width, self.height)
+			else:
+				glutFullScreen()
+			self.fullscreen = not self.fullscreen
+		if key == 'w':
+			self.camera.rotate_object([1,0,0], -5.0)
+		if key == 's':
+			self.camera.rotate_object([1,0,0], 5.0)
+		if key == 'a':
+			self.camera.rotate_object([0,1,0], -5.0)
+		if key == 'd':
+			self.camera.rotate_object([0,1,0], 5.0)
+	
 	def resources(self):
-		self.camera = Camera(60, 3./4., 0.1, 100.0)
-		self.model = Model(
-			vertices=[
-				[0.0, 1.0, 0.0],
-				[-1.0,-1.0, 0.0],
-				[1.0,-1.0, 0.0]
-			]
-		).translate_world([0,0,-1])
-		self.shader = Shader('hello.vs', 'hello.fs')
+		pass
 	
 	def run(self):
 		glutInit(sys.argv)
@@ -65,6 +67,7 @@ class Viewer:
 		glutDisplayFunc(self.display)
 		glutIdleFunc(self.idle)
 		glutReshapeFunc(self.reshape)
+		glutKeyboardFunc(self.keyboard)
 		
 		self.init()
 		self.resources()
@@ -131,7 +134,7 @@ class Object:
 		rot = (cosa * np.identity(4))
 		rot += (1-cosa) * np.array([x*axis, y*axis, z*axis, [0,0,0,1]])
 		rot += sina * np.array([
-			[0, z, -x, 0],
+			[0, z, -y, 0],
 			[-z, 0, x, 0],
 			[y, -x, 0, 0],
 			[0,0,0,0]
@@ -143,21 +146,16 @@ class Object:
 class Model(Object):
 	def __init__(self, vertices, elements=None, colors=None, normals=None):
 		self.vertices_index = vbo.VBO(np.asarray(vertices, 'f'))
-		# self.elements_index = self.buffer(GL_ELEMENT_ARRAY_BUFFER, np.asarray(elements))
-		# self.colors_index = self.buffer(GL_ARRAY_BUFFER, np.asarray(colors))
-		# self.normals_index = self.buffer(GL_ARRAY_BUFFER, np.asarray(normals))
+		if elements:
+			self.elements_index = vbo.VBO(np.asarray(elements, 'f'))
+		if colors:
+			self.colors_index = vbo.VBO(np.asarray(colors, 'f'))
+		if normals:
+			self.normals_index = vbo.VBO(np.asarray(normals, 'f'))
 		self.m = self.identity()
 	
 	def draw(self):
-		glEnableClientState(GL_VERTEX_ARRAY)
-		self.vertices_index.bind()
-		glVertexPointerf(self.vertices_index)
-		
-		glDrawArrays(GL_TRIANGLES, 0, 3)
-		
-		self.vertices_index.unbind()
-		glDisableClientState(GL_VERTEX_ARRAY);
-		
+		pass
 
 
 class Camera(Object):
@@ -166,23 +164,24 @@ class Camera(Object):
 		self.aspect = aspect
 		self.near = near
 		self.far = far
-		self.m = self.identity()
 		self.update_projection()
+		self.m = self.identity()
 	
 	def worldcamera(self):
-		return np.linalg.inv(self.m)
+		inv = np.linalg.inv(self.m)
+		try:
+			return inv
+		except np.linalg.LinAlgError:
+			print "Cannot inverse matrix"
 	
 	def update_projection(self):
 		n = self.near
 		f = self.far
-		
 		t = n * math.tan(self.angle / 2)
-		b = -t
-		l = b * self.aspect
 		r = t * self.aspect
 		
-		fx = 2.*n/(r-l)
-		fy = 2.*n*(t-b)
+		fx = n/r
+		fy = n/r
 		fz = -(f+n)/(f-n)
 		fw = -2.*f*n/(f-n)
 		
@@ -200,27 +199,57 @@ class Texture:
 	
 	def __init__(self, filename):
 		self.filename = filename
-		self.im = self.read()
+		self.im, self.width, self.height = self.read()
 		self.name = self.generate()
+		self.type = GL_TEXTURE_2D
 	
 	def read(self):
 		im = Image.open(self.filename)
-		self.width, self.height = im.size
-		return np.asarray(im)
+		return np.asarray(im), im.size
 	
 	def generate(self):
 		tex = glGenTextures(1)
-		glBindTexture(GL_TEXTURE_2D, tex)
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, self.width, self.height, 0, GL_BGR, GL_UNSIGNED_BYTE, self.im)
+		glBindTexture(self.type, tex)
+		glTexParameteri(self.type, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(self.type, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(self.type, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(self.type, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexImage2D(self.type, 0, GL_RGB8, self.width, self.height, 0, GL_BGR, GL_UNSIGNED_BYTE, self.im)
 		return tex
 	
 	def bind(self, n):
 		glActiveTexture(self.tex[n])
-		glBindTexture(GL_TEXTURE_2D, self.name)
+		glBindTexture(self.type, self.name)
+
+
+class Cubemap(Texture):
+	tex = [
+		GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+		GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+		GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
+		GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+		GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
+		GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
+	]
+	
+	def __init__(self, folder, format='map%d.png'):
+		self.type = GL_TEXTURE_CUBE_MAP
+		self.index = self.load(folder, format)
+	
+	def load(self, folder, format):
+		glEnable(GL_TEXTURE_CUBE_MAP)
+		index = glGenTextures(1)
+		glBindTexture(self.type, cubemap)
+		
+		for i in range(6):
+			im, w, h = self.read('%s/'+format % (folder, i))
+			glTexImage2D(self.tex[i], 0, 3, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, im)
+		
+		glTexParameteri(self.type, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+		glTexParameteri(self.type, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+		glTexParameterf(self.type, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+		glTexParameterf(self.type, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+		return index
 
 
 # Shaders
@@ -274,11 +303,12 @@ class Shader:
 	
 	def set_matrices(self, model, camera):
 		self.set_matrix('modelworld', model.modelworld())
-		self.set_matrix('worldcamera', camera.worldcamera())
+		self.set_matrix('worldcamera', camera.worldcamera(), False)
 		self.set_matrix('projection', camera.proj)
 	
-	def set_matrix(self, name, mat):
-		glUniformMatrix4fv(self.uniforms[name], 1, GL_TRUE, mat)
+	def set_matrix(self, name, mat, rowmajor=True):
+		rowm = GL_TRUE if rowmajor else GL_FALSE
+		glUniformMatrix4fv(self.uniforms[name], 1, rowm, mat)
 	
 	def use(self):
 		glUseProgram(self.program)

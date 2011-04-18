@@ -5,7 +5,7 @@ from scipy import signal
 
 
 class WaterViewer(Viewer):
-	refresh = 10
+	refresh = 20
 	
 	def display(self):
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -22,8 +22,13 @@ class WaterViewer(Viewer):
 	
 	def resources(self):
 		self.shader = Shader('water.vs', 'water.fs')
-		self.water = Water(60,40).translate_world([0,0,-10.])
-		self.camera = Camera(45.0, 3./4., 0.1, 100.0)
+		self.water = Water(40, 40)
+		self.camera = Camera(60.0, 3./4., 0.1, 100.0).translate_object([0,1,5]).rotate_object([0,1,0], 20.0)
+		self.light = Object()
+		
+		# self.cube = Model(vertices=[
+		# 	(-1,-1,-1), (1,-1,-1), (1,-1,1), (-1,-1,1),
+		# ])
 
 
 class Water(Object):
@@ -38,7 +43,7 @@ class Water(Object):
 		self.make_vertices()
 	
 	def init_grid(self):
-		self.heights[int(self.rows/2.),int(self.cols/2.)] = 15
+		self.heights[int(self.rows/2.),int(self.cols/2.)] = 5
 		z, x = np.array(np.meshgrid(range(self.rows), range(self.cols)), 'f')
 		x, z = x.ravel(), z.ravel()
 		self.v = np.vstack((x, np.zeros_like(x), -z)).T
@@ -56,21 +61,22 @@ class Water(Object):
 		self.heights += self.velocities
 	
 	def make_vertices(self):
-		# h = self.heights.flatten()
-		# self.v[:,1] = h
-		v = [
-			[-1.0, 0.0, 0.0],
-			[0.0, 1.0, 0.0],
-			[1.0,0.0, 0.0]
-		]
-		self.vertices_index = vbo.VBO(np.array(v, 'f'))
+		h = self.heights.flatten()
+		self.v[:,1] = h
+		self.vertices_index = vbo.VBO(np.array(self.v, 'f'))
+		# v = [
+		# 	[-1.0, 0.0, 0.0],
+		# 	[0.0, 1.0, 0.0],
+		# 	[1.0,0.0, 0.0]
+		# ]
+		# self.vertices_index = vbo.VBO(np.array(v, 'f'))
 	
 	def draw(self):
 		glEnableClientState(GL_VERTEX_ARRAY)
 		self.vertices_index.bind()
 		glVertexPointerf(self.vertices_index)
-		glPointSize(10.0)
-		glDrawArrays(GL_POINTS, 0, 3)
+		glPointSize(3.0)
+		glDrawArrays(GL_POINTS, 0, self.rc)
 		
 		self.vertices_index.unbind()
 		glDisableClientState(GL_VERTEX_ARRAY);
