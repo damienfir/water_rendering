@@ -11,6 +11,8 @@ class WaterViewer(Viewer):
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 		self.shader.use()
 		self.shader.set_matrices(self.water, self.camera)
+		self.shader.set_vector3('eye', self.camera.origin())
+		self.shader.set_vector3('light', self.light.origin())
 		self.water.draw()
 		glutSwapBuffers()
 	
@@ -21,7 +23,7 @@ class WaterViewer(Viewer):
 			glutPostRedisplay()
 	
 	def resources(self):
-		self.shader = Shader('water.vs', 'water.fs')
+		self.shader = Shader('water.vs', 'water.fs', ['eye', 'light'])
 		self.water = Water(40, 40)
 		self.camera = Camera(60.0, 3./4., 0.1, 100.0).translate_object([0,1,5]).rotate_object([0,1,0], 20.0)
 		self.light = Object()

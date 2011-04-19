@@ -82,9 +82,15 @@ class Object:
 	def modelworld(self):
 		return self.m
 	
+	def modelworld_n(self):
+		return np.linalg.inv(self.m).T
+	
 	def identity(self):
 		return np.matrix(np.identity(4, 'f'))
-		
+	
+	def origin(self):
+		return self.m * np.array([0,0,0])
+	
 	def scale_world(self, s):
 		self.m = self.scale_matrix(s) * self.m
 		return self
@@ -174,6 +180,9 @@ class Camera(Object):
 		except np.linalg.LinAlgError:
 			print "Cannot inverse matrix"
 	
+	def worldcamera_n(self):
+		return self.m.T
+	
 	def update_projection(self):
 		n = self.near
 		f = self.far
@@ -190,7 +199,7 @@ class Camera(Object):
 			[0, fy, 0, 0],
 			[0, 0, fz, fw],
 			[0, 0, -1, 0]
-		], 'f')
+		])
 	
 
 # Textures
@@ -254,11 +263,12 @@ class Cubemap(Texture):
 
 # Shaders
 class Shader:
-	def __init__(self, vs_fname, fs_fname):
+	def __init__(self, vs_fname, fs_fname, uniforms=[]):
 		self.vs = self.compile(GL_VERTEX_SHADER, vs_fname)
 		self.fs = self.compile(GL_FRAGMENT_SHADER, fs_fname)
 		self.program = self.make_program()
-		self.save_locations()
+		self.uniforms = {}
+		self.save_locations(uniforms.extend(['modelworld', 'worldcamera', 'projection', 'modelworld_n', 'worldcamera_n']))
 	
 	def compile(self, target, fname):
 		source = open(fname).read()
@@ -291,12 +301,9 @@ class Shader:
 			glDeleteProgram(program)
 		return status
 	
-	def save_locations(self):
-		self.uniforms = {
-			'modelworld': glGetUniformLocation(self.program, 'modelworld'),
-			'worldcamera': glGetUniformLocation(self.program, 'worldcamera'),
-			'projection': glGetUniformLocation(self.program, 'projection')
-		}
+	def save_locations(self, uniforms):
+		for u in uniforms:
+			self.uniforms[u] = glGetUniformLocation(self.program, u)
 	
 	def set_uniform(self, func, name, value):
 		func(self.uniforms[name], value)
@@ -305,10 +312,17 @@ class Shader:
 		self.set_matrix('modelworld', model.modelworld())
 		self.set_matrix('worldcamera', camera.worldcamera(), False)
 		self.set_matrix('projection', camera.proj)
+		self.set_matrix('modelworld_n', model.modelworld_n())
+		self.set_matrix('worldcamera_n', camera.worldcamera_n())
 	
 	def set_matrix(self, name, mat, rowmajor=True):
 		rowm = GL_TRUE if rowmajor else GL_FALSE
+		mat = np.matrix(mat, 'f')
 		glUniformMatrix4fv(self.uniforms[name], 1, rowm, mat)
+	
+	def set_vector3(self, name, v):
+		v = np.array(v, 'f')
+		glUniform3f(self.uniforms[name], v[0], v[1], v[2])
 	
 	def use(self):
 		glUseProgram(self.program)
