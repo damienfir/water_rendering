@@ -79,17 +79,17 @@ class Object:
 	def __init__(self):
 		self.m = self.identity()
 	
+	def identity(self):
+		return np.matrix(np.identity(4, 'f'))
+	
 	def modelworld(self):
 		return self.m
 	
 	def modelworld_n(self):
 		return np.linalg.inv(self.m).T
 	
-	def identity(self):
-		return np.matrix(np.identity(4, 'f'))
-	
 	def origin(self):
-		return self.m * np.array([0,0,0])
+		return self.m * np.matrix([0,0,0,0]).T
 	
 	def scale_world(self, s):
 		self.m = self.scale_matrix(s) * self.m
@@ -268,36 +268,38 @@ class Shader:
 		self.fs = self.compile(GL_FRAGMENT_SHADER, fs_fname)
 		self.program = self.make_program()
 		self.uniforms = {}
-		self.save_locations(uniforms.extend(['modelworld', 'worldcamera', 'projection', 'modelworld_n', 'worldcamera_n']))
+		self.save_locations(uniforms + ['modelworld', 'worldcamera', 'projection', 'modelworld_n', 'worldcamera_n'])
 	
 	def compile(self, target, fname):
 		source = open(fname).read()
 		shader = glCreateShader(target)
 		glShaderSource(shader, source)
 		glCompileShader(shader)
-		if not self.check_compile(shader): return 0
+		if not self.check_compile(shader):
+			print "Failed to compile %s: %s" % (target, fname)
+			return 0
 		return shader
-		
+	
 	def make_program(self):
 		p = glCreateProgram()
 		glAttachShader(p, self.vs)
 		glAttachShader(p, self.fs)
 		glBindAttribLocation(p, 0, "position")
 		glLinkProgram(p)
-		if not self.check_link(p): return 0
+		if not self.check_link(p):
+			print "Failed to link shader program"
+			return 0
 		return p
 	
 	def check_compile(self, shader):
 		status = glGetShaderiv(shader, GL_COMPILE_STATUS, None)
 		if not status:
-			print "Failed to compile shader: %s" % fname
 			glDeleteShader(shader)
 		return status
 	
 	def check_link(self, program):
 		status = glGetProgramiv(program, GL_LINK_STATUS, None)
 		if not status:
-			print "Failed to link shader program"
 			glDeleteProgram(program)
 		return status
 	

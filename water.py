@@ -9,11 +9,14 @@ class WaterViewer(Viewer):
 	
 	def display(self):
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+		
 		self.shader.use()
 		self.shader.set_matrices(self.water, self.camera)
 		self.shader.set_vector3('eye', self.camera.origin())
 		self.shader.set_vector3('light', self.light.origin())
+		
 		self.water.draw()
+		
 		glutSwapBuffers()
 	
 	def idle(self):
@@ -23,10 +26,10 @@ class WaterViewer(Viewer):
 			glutPostRedisplay()
 	
 	def resources(self):
-		self.shader = Shader('water.vs', 'water.fs', ['eye', 'light'])
+		self.shader = Shader('shaders/water.vs', 'shaders/water.fs', ['eye', 'light'])
 		self.water = Water(40, 40)
 		self.camera = Camera(60.0, 3./4., 0.1, 100.0).translate_object([0,1,5]).rotate_object([0,1,0], 20.0)
-		self.light = Object()
+		self.light = Object().translate_world([0,10,0])
 		
 		# self.cube = Model(vertices=[
 		# 	(-1,-1,-1), (1,-1,-1), (1,-1,1), (-1,-1,1),
@@ -66,12 +69,6 @@ class Water(Object):
 		h = self.heights.flatten()
 		self.v[:,1] = h
 		self.vertices_index = vbo.VBO(np.array(self.v, 'f'))
-		# v = [
-		# 	[-1.0, 0.0, 0.0],
-		# 	[0.0, 1.0, 0.0],
-		# 	[1.0,0.0, 0.0]
-		# ]
-		# self.vertices_index = vbo.VBO(np.array(v, 'f'))
 	
 	def draw(self):
 		glEnableClientState(GL_VERTEX_ARRAY)

@@ -1,6 +1,6 @@
 varying vec3 normal, lightVec, viewVec;
 
-uniform samplerCube cubeEnv;
+// uniform samplerCube cubeEnv;
 
 const float ambient = 0.5;
 const float specularcontribution = 0.5;
@@ -30,9 +30,10 @@ void main()
         lightIntensity += specularcontribution * spec;
 	}
 	
-    vec4 colorRefl = textureCube(cubeEnv, gl_TexCoord[0].xyz);
-    
-    vec4 colorRefr = textureCube(cubeEnv, gl_TexCoord[1].xyz);
+	vec4 colorRefl = vec4(1.0, 0.0, 0.0, 1.0);
+	vec4 colorRefr = vec4(0.0, 1.0, 0.0, 1.0);
+    // vec4 colorRefl = textureCube(cubeEnv, gl_TexCoord[0].xyz);    
+    // vec4 colorRefr = textureCube(cubeEnv, gl_TexCoord[1].xyz);
 	
     gl_FragColor = mix(colorRefl, colorRefr, 0.4) * lightIntensity;
 }
