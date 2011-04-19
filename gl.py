@@ -9,7 +9,6 @@ from OpenGL.arrays import vbo
 import Image
 import numpy as np
 
-
 class Viewer:
 	refresh = 40
 	
@@ -22,6 +21,7 @@ class Viewer:
 	def init(self):
 		glClearColor(0,0,0,0)
 		glEnable(GL_DEPTH_TEST)
+		glShadeModel(GL_SMOOTH)
 		self.last = glutGet(GLUT_ELAPSED_TIME)
 	
 	def can_refresh(self):
@@ -174,9 +174,8 @@ class Camera(Object):
 		self.m = self.identity()
 	
 	def worldcamera(self):
-		inv = np.linalg.inv(self.m)
 		try:
-			return inv
+			return np.linalg.inv(self.m)
 		except np.linalg.LinAlgError:
 			print "Cannot inverse matrix"
 	
@@ -212,9 +211,11 @@ class Texture:
 		self.name = self.generate()
 		self.type = GL_TEXTURE_2D
 	
-	def read(self):
-		im = Image.open(self.filename)
-		return np.asarray(im), im.size
+	def read(self, filename=None):
+		fname = filename or self.filename
+		im = Image.open(fname)
+		w, h = im.size
+		return np.asarray(im), w, h
 	
 	def generate(self):
 		tex = glGenTextures(1)
@@ -241,17 +242,23 @@ class Cubemap(Texture):
 		GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
 	]
 	
-	def __init__(self, folder, format='map%d.png'):
+	def __init__(self, folder):
 		self.type = GL_TEXTURE_CUBE_MAP
 		self.index = self.load(folder, format)
+	
+	def bind(self):
+		glBindTexture(self.type, self.index)
+	
+	def unbind(self):
+		glBindTexture(self.type, 0)
 	
 	def load(self, folder, format):
 		glEnable(GL_TEXTURE_CUBE_MAP)
 		index = glGenTextures(1)
-		glBindTexture(self.type, cubemap)
+		glBindTexture(self.type, index)
 		
 		for i in range(6):
-			im, w, h = self.read('%s/'+format % (folder, i))
+			im, w, h = self.read('%s/map%s.bmp' % (folder, i))
 			glTexImage2D(self.tex[i], 0, 3, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, im)
 		
 		glTexParameteri(self.type, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
@@ -263,12 +270,12 @@ class Cubemap(Texture):
 
 # Shaders
 class Shader:
-	def __init__(self, vs_fname, fs_fname, uniforms=[]):
+	def __init__(self, vs_fname, fs_fname, uniforms=[], attributes=[]):
 		self.vs = self.compile(GL_VERTEX_SHADER, vs_fname)
 		self.fs = self.compile(GL_FRAGMENT_SHADER, fs_fname)
 		self.program = self.make_program()
 		self.uniforms = {}
-		self.save_locations(uniforms + ['modelworld', 'worldcamera', 'projection', 'modelworld_n', 'worldcamera_n'])
+		self.save_locations(uniforms + ['modelworld', 'worldcamera', 'projection', 'modelworld_n', 'worldcamera_n'], attributes)
 	
 	def compile(self, target, fname):
 		source = open(fname).read()
@@ -303,24 +310,31 @@ class Shader:
 			glDeleteProgram(program)
 		return status
 	
-	def save_locations(self, uniforms):
+	def save_locations(self, uniforms, attributes):
 		for u in uniforms:
 			self.uniforms[u] = glGetUniformLocation(self.program, u)
+		for a in attributes:
+			self.attributes[a] = glGetAttribLocation(self.program, a)
 	
 	def set_uniform(self, func, name, value):
 		func(self.uniforms[name], value)
 	
 	def set_matrices(self, model, camera):
-		self.set_matrix('modelworld', model.modelworld())
-		self.set_matrix('worldcamera', camera.worldcamera(), False)
-		self.set_matrix('projection', camera.proj)
-		self.set_matrix('modelworld_n', model.modelworld_n())
-		self.set_matrix('worldcamera_n', camera.worldcamera_n())
+		self.set_matrix4('modelworld', model.modelworld())
+		self.set_matrix4('worldcamera', camera.worldcamera(), False)
+		self.set_matrix4('projection', camera.proj)
+		self.set_matrix3('modelworld_n', model.modelworld_n())
+		self.set_matrix3('worldcamera_n', camera.worldcamera_n(), False)
 	
-	def set_matrix(self, name, mat, rowmajor=True):
+	def set_matrix4(self, name, mat, rowmajor=True):
 		rowm = GL_TRUE if rowmajor else GL_FALSE
 		mat = np.matrix(mat, 'f')
 		glUniformMatrix4fv(self.uniforms[name], 1, rowm, mat)
+	
+	def set_matrix3(self, name, mat, rowmajor=True):
+		rowm = GL_TRUE if rowmajor else GL_FALSE
+		mat = np.matrix(mat, 'f')
+		glUniformMatrix3fv(self.uniforms[name], 1, rowm, mat)
 	
 	def set_vector3(self, name, v):
 		v = np.array(v, 'f')
