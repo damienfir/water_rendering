@@ -30,11 +30,17 @@ class WaterViewer(Viewer):
 			self.water.make_vertices()
 			glutPostRedisplay()
 	
+	def keyboard(self, key, x, y):
+		if key == 'b':
+			self.water.bump(0,0)
+		else:
+			super(WaterViewer, self).keyboard(key, x, y)
+	
 	def resources(self):
 		self.shader = Shader('shaders/water.vs', 'shaders/water.fs', ['eye', 'light'])
 		self.water = Water(40, 40)
 		self.camera = Camera(60.0, 3./4., 0.1, 100.0).translate_object([0,1,5]).rotate_object([0,1,0], 20.0)
-		self.light = Object().translate_world([0,10,0])
+		self.light = Object().translate_world([0,10,-100])
 		self.cubemap = Cubemap('data/city')
 
 
@@ -51,17 +57,19 @@ class Water(Object):
 		self.make_vertices()
 	
 	def init_grid(self):
-		self.heights[int(self.rows/2.),int(self.cols/2.)] = 5
+		# self.heights[int(self.rows/2.),int(self.cols/2.)] = 5
 		x, z = np.array(np.meshgrid(range(self.cols), range(self.rows)), 'f')
 		x, z = x.ravel(), z.ravel()
 		self.vertices = np.vstack((x, np.zeros_like(x), -z)).T
 	
 	def heightmap_kernel(self):
+		sq2 = 1/math.sqrt(2)
+		s = 4*sq2 + 4
 		return np.array([
-			[0, 1, 0],
-			[1, -4, 1],
-			[0, 1, 0]
-		]) * 0.25
+			[sq2, 1, sq2],
+			[1, -s, 1],
+			[sq2, 1, sq2]
+		]) / s
 	
 	def update_map(self):
 		self.velocities += signal.correlate2d(self.heights, self.kernel, mode='same', boundary='symm')
@@ -71,11 +79,15 @@ class Water(Object):
 	def make_triangles(self):
 		n = (self.rows-1)*(self.cols-1)
 		ind = np.zeros(n*6)
-		base = np.arange(n)
-		
+		c = self.cols
+		base = []
+		for i in xrange(self.rows-1):
+			for j in xrange(self.cols-1):
+				base.append(i*c + j)
+		base = np.array(base)
 		ind[0::6] = base[:]
 		ind[1::6] = base + self.cols
-		ind[2::6] = base + 1		
+		ind[2::6] = base + 1
 		ind[3::6] = base + self.cols
 		ind[4::6] = base + self.cols + 1
 		ind[5::6] = base + 1
@@ -88,11 +100,13 @@ class Water(Object):
 	
 	def make_normals(self):
 		v = self.vertices
-		a = v[self.indices[0::3]] - v[self.indices[1::3]]
-		b = v[self.indices[0::3]] - v[self.indices[2::3]]
-		c = np.cross(a,b)
+		p = v[self.indices[0::3]]
+		q = v[self.indices[1::3]]
+		r = v[self.indices[2::3]]
+		
+		c = np.cross(r-p, q-p)
 		norms = np.sqrt((c**2).sum(1))
-		c = c / norms[:, np.newaxis]
+		c /= norms[:, np.newaxis]
 		
 		normals = np.zeros((self.rc, 3))
 		normals[self.indices[0::6]] += c[0::2]
@@ -119,8 +133,10 @@ class Water(Object):
 		glNormalPointerf(self.normals)
 		glDrawElementsui(GL_TRIANGLES, self.indices)
 		self.disable()
+	
+	def bump(self, x, y, a=-1):
+		self.velocities[x,y] = a
 
 
 v = WaterViewer('Water vodka', 640, 480)
-
 v.run()

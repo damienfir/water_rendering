@@ -2,9 +2,9 @@ varying vec3 normal, lightVec, viewVec;
 
 uniform samplerCube cubeEnv;
 
-const float ambient = 0.5;
+const float ambient = 0.3;
 const float specularcontribution = 0.5;
-const float diffusecontribution = 0.7;
+const float diffusecontribution = 0.5;
 
 void main()
 {
@@ -25,15 +25,16 @@ void main()
         vec3 R = normalize(reflect(-L, N));
         
 		float spec = max(dot(R, E), 0.0);
-		spec = pow(spec, 100.0);
+		spec = pow(spec, 200.0);
 		
         lightIntensity += specularcontribution * spec;
 	}
 	
-	// vec4 colorRefl = vec4(1.0, 0.0, 0.0, 1.0);
-	// vec4 colorRefr = vec4(1.0, 0.0, 0.0, 1.0);
     vec4 colorRefl = textureCube(cubeEnv, gl_TexCoord[0].xyz);
     vec4 colorRefr = textureCube(cubeEnv, gl_TexCoord[1].xyz);
+	vec4 color = mix(colorRefl, colorRefr, 0.8);
 	
-    gl_FragColor = mix(colorRefl, colorRefr, 1.0) * lightIntensity;
+	color = vec4(1,0,0,1);
+	
+    gl_FragColor = color * lightIntensity;
 }

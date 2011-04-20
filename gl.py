@@ -9,7 +9,7 @@ from OpenGL.arrays import vbo
 import Image
 import numpy as np
 
-class Viewer:
+class Viewer(object):
 	refresh = 40
 	
 	def __init__(self, name, width, height):
@@ -75,7 +75,7 @@ class Viewer:
 		glutMainLoop()
 
 
-class Object:
+class Object(object):
 	def __init__(self):
 		self.m = self.identity()
 	
@@ -86,10 +86,11 @@ class Object:
 		return self.m
 	
 	def modelworld_n(self):
-		return np.linalg.inv(self.m).T
+		return np.linalg.inv(self.m).T[:3,:3]
 	
 	def origin(self):
-		return self.m * np.matrix([0,0,0,0]).T
+		o = self.m * np.matrix([0,0,0,1.0], 'f').T
+		return o / o[-1,-1]
 	
 	def scale_world(self, s):
 		self.m = self.scale_matrix(s) * self.m
@@ -180,7 +181,7 @@ class Camera(Object):
 			print "Cannot inverse matrix"
 	
 	def worldcamera_n(self):
-		return self.m.T
+		return self.m.T[:3,:3]
 	
 	def update_projection(self):
 		n = self.near
@@ -324,7 +325,7 @@ class Shader:
 		self.set_matrix4('worldcamera', camera.worldcamera(), False)
 		self.set_matrix4('projection', camera.proj)
 		self.set_matrix3('modelworld_n', model.modelworld_n())
-		self.set_matrix3('worldcamera_n', camera.worldcamera_n(), False)
+		self.set_matrix3('worldcamera_n', camera.worldcamera_n())
 	
 	def set_matrix4(self, name, mat, rowmajor=True):
 		rowm = GL_TRUE if rowmajor else GL_FALSE

@@ -14,6 +14,7 @@ void main()
 {
     vec3 vertex = vec3(modelworld * gl_Vertex);
 	normal =  normalize(modelworld_n * gl_Normal);
+	// normal = gl_Normal;
 	
     // for texturing
     vec3 I = normalize(eye - vertex);
@@ -29,8 +30,8 @@ void main()
     normal = worldcamera_n * normal;
 	
     // for phong lighting
-	vec3 light_cam = vec3(worldcamera * vec4(light, 1.0));
-	lightVec = light_cam - vertex;
+	// vec3 light_cam = vec3(worldcamera * vec4(light, 1.0));
+	lightVec = light - vertex;
 	viewVec  = -vertex;
 	
 	gl_Position	= projection * vec4(vertex, 1.0);
