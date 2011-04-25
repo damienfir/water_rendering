@@ -4,3 +4,6 @@ Prototype with PyOpengGL
 OpenGL
 <http://www.swiftless.com/opengltuts.html>
 <http://www.songho.ca/opengl/index.html>
+
+3D graphics
+<http://www.arcsynthesis.org/gltut/index.html>
